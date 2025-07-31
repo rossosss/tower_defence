@@ -251,6 +251,14 @@
         }
 
         function startPlacingMode(type) {
+            orthoCamera.left = window.innerWidth / -50;
+            orthoCamera.right = window.innerWidth / 50;
+            orthoCamera.top = window.innerHeight / 50;
+            orthoCamera.bottom = window.innerHeight / -50;
+            orthoCamera.position.set(0, 50, 0);
+            orthoCamera.lookAt(scene.position);
+            orthoCamera.updateProjectionMatrix();
+
             document.getElementById('itemModal').style.display = 'none';
             gameState = 'placing';
             infoElement.innerText = 'Кликните, чтобы разместить объект. Нажмите Esc для отмены.';
@@ -297,6 +305,22 @@
         }
 
         function onPointerMove(event) {
+            if (gameState === 'placing') {
+                const clientX = event.clientX || (event.touches && event.touches[0] ? event.touches[0].clientX : previousPointerPosition.x);
+                const clientY = event.clientY || (event.touches && event.touches[0] ? event.touches[0].clientY : previousPointerPosition.y);
+
+                mouse.x = (clientX / window.innerWidth) * 2 - 1;
+                mouse.y = - (clientY / window.innerHeight) * 2 + 1;
+
+                raycaster.setFromCamera(mouse, orthoCamera);
+                const intersects = raycaster.intersectObject(ground);
+                if (intersects.length > 0 && previewObject) {
+                    previewObject.position.copy(intersects[0].point);
+                    previewObject.position.y = 0.5;
+                }
+                return;
+            }
+            
             if (!isDragging) return;
             const currentX = event.clientX || event.touches[0].clientX;
             const currentY = event.clientY || event.touches[0].clientY;
@@ -324,6 +348,12 @@
         renderer.domElement.addEventListener('touchmove', onPointerMove, { passive: false });
         renderer.domElement.addEventListener('touchend', onPointerUp);
         
+        renderer.domElement.addEventListener('click', () => {
+            if (gameState === 'placing') {
+                placeObject();
+            }
+        });
+
         document.addEventListener('keydown', (event) => {
             if (gameState === 'playing' || gameState === 'placing') keysPressed[event.code] = true;
             if (event.code === 'Escape' && gameState === 'placing') exitPlacingMode();
@@ -355,13 +385,11 @@
         document.getElementById('addConeBtn').addEventListener('click', () => startPlacingMode('cone'));
         document.getElementById('cancelBtn').addEventListener('click', closeModal);
         document.getElementById('itemModal').addEventListener('click', (event) => { if (event.target.id === 'itemModal') closeModal(); });
-        window.addEventListener('mousedown', placeObject);
-
+        
         // === ИГРОВОЙ ЦИКЛ ===
         function animate() {
             requestAnimationFrame(animate);
             const delta = clock.getDelta();
-            let activeCamera = mainCamera;
 
             if (['playing', 'placing', 'modal'].includes(gameState)) {
                 gameTime += delta;
@@ -394,7 +422,6 @@
                 
                 const moveDirection = new THREE.Vector3();
                 if (isTouchDevice) {
-                    // ИЗМЕНЕНО: Инвертирована ось Y джойстика
                     moveDirection.add(forward.clone().multiplyScalar(joystickVector.y));
                     moveDirection.add(right.clone().multiplyScalar(joystickVector.x));
                 } else {
@@ -408,31 +435,26 @@
                     moveDirection.normalize();
                     player.position.add(moveDirection.multiplyScalar(moveSpeed * delta));
                 }
+                
+                // ИЗМЕНЕНО: Добавлены невидимые стены
+                const mapBoundary = 24.5; // Чуть меньше 25, чтобы куб не выходил за край
+                player.position.x = Math.max(-mapBoundary, Math.min(mapBoundary, player.position.x));
+                player.position.z = Math.max(-mapBoundary, Math.min(mapBoundary, player.position.z));
+
                 checkCheckpoint();
             }
             
-            // Обновление камеры
-            cameraTarget.copy(player.position);
-            cameraTarget.y += 1.0; // Смотрим чуть выше центра игрока
-            const cameraPosition = new THREE.Vector3().setFromSpherical(spherical);
-            mainCamera.position.copy(cameraTarget).add(cameraPosition);
-            mainCamera.lookAt(cameraTarget);
-
+            // ИЗМЕНЕНО: Четкое разделение логики рендеринга
             if (gameState === 'placing') {
-                activeCamera = orthoCamera;
-                // Логика для размещения объекта
-                const moveEvent = { clientX: previousPointerPosition.x, clientY: previousPointerPosition.y };
-                mouse.x = (moveEvent.clientX / window.innerWidth) * 2 - 1;
-                mouse.y = - (moveEvent.clientY / window.innerHeight) * 2 + 1;
-                raycaster.setFromCamera(mouse, orthoCamera);
-                const intersects = raycaster.intersectObject(ground);
-                if (intersects.length > 0 && previewObject) {
-                    previewObject.position.copy(intersects[0].point);
-                    previewObject.position.y = 0.5;
-                }
+                renderer.render(scene, orthoCamera);
+            } else {
+                cameraTarget.copy(player.position);
+                cameraTarget.y += 1.0;
+                const cameraPosition = new THREE.Vector3().setFromSpherical(spherical);
+                mainCamera.position.copy(cameraTarget).add(cameraPosition);
+                mainCamera.lookAt(cameraTarget);
+                renderer.render(scene, mainCamera);
             }
-            
-            renderer.render(scene, activeCamera);
         }
 
         window.addEventListener('resize', () => {
