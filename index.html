@@ -74,7 +74,6 @@
         }
         .modal-content button:hover { opacity: 0.8; }
         .modal-content button.cancel { background-color: #f44336; }
-        /* Стиль для премиум-кнопки */
         .modal-content button.premium {
             background: linear-gradient(45deg, #6a82fb, #fc5c7d);
         }
@@ -93,17 +92,16 @@
             cursor: pointer;
             z-index: 2000;
         }
+        /* ИЗМЕНЕНО: Стили для зоны джойстика */
         #joystick-zone {
             position: absolute;
-            bottom: 50px;
-            left: 50%;
-            transform: translateX(-50%);
-            width: 150px;
-            height: 150px;
+            bottom: 0;
+            left: 0;
+            width: 50%;
+            height: 100%;
             display: none;
         }
     </style>
-    <!-- ИЗМЕНЕНО: Добавлен скрипт Telegram Web App -->
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
 </head>
 <body>
@@ -144,9 +142,9 @@
         const timerLabel = document.getElementById('timer-label');
         const timerValue = document.getElementById('timer-value');
 
-        // ИЗМЕНЕНО: Инициализация Telegram Web App
         const tg = window.Telegram.WebApp;
         try {
+            tg.ready();
             tg.expand();
         } catch (e) {
             console.error("Telegram Web App API is not available.", e);
@@ -207,7 +205,7 @@
         const moveSpeed = 5;
         const raycaster = new THREE.Raycaster();
         const mouse = new THREE.Vector2();
-        let placingObjectType = null; // ИЗМЕНЕНО: Храним тип объекта, а не сам объект
+        let placingObjectType = null;
         const isTouchDevice = 'ontouchstart' in window;
 
         // === УПРАВЛЕНИЕ КАМЕРОЙ ===
@@ -230,8 +228,8 @@
             joystickZone.style.display = 'block';
             joystick = nipplejs.create({
                 zone: joystickZone,
-                mode: 'static',
-                position: { left: '50%', top: '50%' },
+                // ИЗМЕНЕНО: Динамический режим для джойстика
+                mode: 'dynamic',
                 color: 'white',
                 size: 150
             });
@@ -476,7 +474,6 @@
             }
         });
 
-        // --- Обработчики кнопок ---
         function handleButtonClick(callback) {
             return (event) => {
                 event.preventDefault();
@@ -490,24 +487,25 @@
         document.getElementById('addConeBtn').addEventListener('click', handleButtonClick(() => startPlacingMode('cone')));
         document.getElementById('cancelBtn').addEventListener('click', handleButtonClick(closeModal));
         
-        // ИЗМЕНЕНО: Логика покупки за Telegram Stars
         document.getElementById('addStarMonumentBtn').addEventListener('click', handleButtonClick(() => {
-            // Здесь должен быть реальный slug инвойса, сгенерированный вашим бэкендом
             const invoiceSlug = 'test-invoice-slug'; 
             try {
+                if (!tg.isVersionAtLeast('6.9')) {
+                    tg.showAlert('Функция оплаты за Звезды требует обновленной версии Telegram.');
+                    return;
+                }
                 tg.showInvoice(invoiceSlug, (status) => {
                     if (status === 'paid') {
-                        tg.close(); // Закрываем окно оплаты
+                        tg.close();
                         startPlacingMode('star_monument');
-                    } else if (status === 'cancelled') {
+                    } else {
                         tg.HapticFeedback.notificationOccurred('error');
-                    } else { // 'failed', 'pending'
-                        tg.HapticFeedback.notificationOccurred('error');
+                        tg.showAlert(`Оплата не удалась. Статус: ${status}`);
                     }
                 });
             } catch (e) {
+                tg.showAlert(`Ошибка вызова окна оплаты. Убедитесь, что вы используете настоящий бот и корректный счет. Ошибка: ${e.message}`);
                 console.warn("Telegram Stars payment is not available. Simulating success for testing.");
-                // Симуляция для тестирования в браузере
                 startPlacingMode('star_monument');
             }
         }));
