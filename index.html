@@ -92,7 +92,6 @@
             cursor: pointer;
             z-index: 2000;
         }
-        /* ИЗМЕНЕНО: Стили для зоны джойстика */
         #joystick-zone {
             position: absolute;
             bottom: 0;
@@ -228,7 +227,6 @@
             joystickZone.style.display = 'block';
             joystick = nipplejs.create({
                 zone: joystickZone,
-                // ИЗМЕНЕНО: Динамический режим для джойстика
                 mode: 'dynamic',
                 color: 'white',
                 size: 150
@@ -238,6 +236,19 @@
         }
 
         // === ЛОГИКА ИГРЫ ===
+        // ИЗМЕНЕНО: Безопасная функция для показа уведомлений
+        function safeShowAlert(message) {
+            try {
+                if (tg && tg.showAlert) {
+                    tg.showAlert(message);
+                } else {
+                    console.log("Alert:", message);
+                }
+            } catch (e) {
+                console.error("safeShowAlert failed:", e);
+            }
+        }
+
         function formatTime(seconds) {
             const minutes = Math.floor(seconds / 60);
             const remainingSeconds = Math.floor(seconds % 60);
@@ -365,6 +376,8 @@
             const target = event.target;
             if (target.closest && (target.closest('#joystick-zone') || target.closest('.modal-overlay'))) return;
             
+            // ИЗМЕНЕНО: Предотвращаем стандартное поведение в самом начале
+            event.preventDefault();
             touchMoved = false;
             if (event.touches.length === 1) {
                 isDragging = true;
@@ -491,7 +504,7 @@
             const invoiceSlug = 'test-invoice-slug'; 
             try {
                 if (!tg.isVersionAtLeast('6.9')) {
-                    tg.showAlert('Функция оплаты за Звезды требует обновленной версии Telegram.');
+                    safeShowAlert('Функция оплаты за Звезды требует обновленной версии Telegram.');
                     return;
                 }
                 tg.showInvoice(invoiceSlug, (status) => {
@@ -500,11 +513,11 @@
                         startPlacingMode('star_monument');
                     } else {
                         tg.HapticFeedback.notificationOccurred('error');
-                        tg.showAlert(`Оплата не удалась. Статус: ${status}`);
+                        safeShowAlert(`Оплата не удалась. Статус: ${status}`);
                     }
                 });
             } catch (e) {
-                tg.showAlert(`Ошибка вызова окна оплаты. Убедитесь, что вы используете настоящий бот и корректный счет. Ошибка: ${e.message}`);
+                safeShowAlert(`Ошибка вызова окна оплаты. Убедитесь, что вы используете настоящий бот и корректный счет. Ошибка: ${e.message}`);
                 console.warn("Telegram Stars payment is not available. Simulating success for testing.");
                 startPlacingMode('star_monument');
             }
